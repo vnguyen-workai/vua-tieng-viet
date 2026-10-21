@@ -170,7 +170,7 @@ function mount(html) {
 // ================= Trang chủ =================
 function renderHome() {
   const features = [
-    { t: "Kiến thức phong phú", d: "Hàng chục câu hỏi đa dạng về từ vựng, thành ngữ, tục ngữ, ca dao", to: "cap-do",
+    { t: "Kiến thức phong phú", d: "Hơn 250 câu hỏi với 5 dạng: xếp chữ, điền chữ, điền từ, xếp câu, chính tả", to: "cap-do",
       ico: '<svg viewBox="0 0 48 48" class="ico"><path d="M4 10c6-3 13-3 20 1 7-4 14-4 20-1v28c-6-3-13-3-20 1-7-4-14-4-20-1z" fill="#2ec4b6" stroke="#0e7c74" stroke-width="2.5" stroke-linejoin="round"/><path d="M24 11v28" stroke="#0e7c74" stroke-width="2.5"/><path d="M9 17c3-1 7-1 10 1M9 23c3-1 7-1 10 1M29 18c3-2 7-2 10-1M29 24c3-2 7-2 10-1" stroke="#d6fff9" stroke-width="2" stroke-linecap="round"/></svg>' },
     { t: "Vừa học vừa chơi", d: "Giúp bạn mở rộng vốn từ và hiểu biết ngôn ngữ", to: "cap-do",
       ico: '<svg viewBox="0 0 48 48" class="ico"><path d="M24 8c-4-4-12-3-13 3-5 1-7 7-4 11-3 4-1 10 4 11 1 6 9 7 13 3z" fill="#5b9dff" stroke="#2a5fc4" stroke-width="2.5" stroke-linejoin="round"/><path d="M24 8c4-4 12-3 13 3 5 1 7 7 4 11 3 4 1 10-4 11-1 6-9 7-13 3z" fill="#7cb3ff" stroke="#2a5fc4" stroke-width="2.5" stroke-linejoin="round"/><path d="M24 8v28M15 17c3 0 5 2 5 5M33 17c-3 0-5 2-5 5M15 28c2-2 5-2 7 0M33 28c-2-2-5-2-7 0" stroke="#fff" stroke-width="2" stroke-linecap="round" fill="none"/></svg>' },
@@ -213,6 +213,12 @@ function renderLevels() {
         <div><button class="back-btn" data-back>${ICON.back} Quay lại</button></div>
         <h1>Chọn cấp độ</h1><div></div>
       </div>
+      <div class="modes stagger" role="radiogroup" aria-label="Dạng câu hỏi">
+        ${MODES.map((m, i) => `
+          <button class="mode ${m.key === gameMode ? "active" : ""}" data-mode="${m.key}" role="radio" aria-checked="${m.key === gameMode}" style="--i:${i}">
+            <span class="mi">${m.icon}</span><span class="mt"><b>${m.name}</b><small>${esc(m.desc)}</small></span>
+          </button>`).join("")}
+      </div>
       <div class="levels-grid stagger">
         ${LEVEL_ORDER.map((key, i) => {
           const L = LEVELS[key];
@@ -232,6 +238,11 @@ function renderLevels() {
       </div>
     </section>`);
   $("[data-back]", page).addEventListener("click", () => go(""));
+  $$(".mode", page).forEach((b) => b.addEventListener("click", () => {
+    gameMode = b.dataset.mode; store.set("vtv_mode", gameMode);
+    $$(".mode", page).forEach((x) => { x.classList.toggle("active", x === b); x.setAttribute("aria-checked", x === b); });
+    Sound.play("place", MODES.findIndex((m) => m.key === gameMode));
+  }));
   $$(".level-card", page).forEach((card) => {
     const start = () => startGame(card.dataset.level);
     card.addEventListener("click", start);
@@ -243,15 +254,79 @@ function renderLevels() {
 let game = null;
 let timerId = null;
 
+// Dạng câu hỏi: scramble (Sắp xếp chữ cái) và 4 dạng trong questions-more.js
+const MODES = [
+  { key: "mix", name: "Tổng hợp", desc: "Đủ cả 5 dạng", icon: "🎲" },
+  { key: "scramble", name: "Sắp xếp chữ cái", desc: "H Ò N G A → ?", icon: "🔤" },
+  { key: "letters", name: "Điền chữ cái", desc: "Từ _ưa đến nay", icon: "✏️" },
+  { key: "word", name: "Điền từ", desc: "… hay như rồng", icon: "📜" },
+  { key: "order", name: "Sắp xếp từ", desc: "vành / Trăng / cứ", icon: "🧩" },
+  { key: "spell", name: "Chính tả", desc: "xúm xít hay súm sít?", icon: "✅" },
+];
+const KIND_INSTR = {
+  scramble: "Sắp xếp các chữ cái sau để tạo thành một từ/cụm từ có nghĩa:",
+  letters: "Chữ cái nào còn thiếu trong câu sau?",
+  word: "Điền từ còn thiếu vào chỗ trống:",
+  order: "Sắp xếp các từ sau thành câu hoàn chỉnh:",
+  spell: "Cách viết nào đúng chính tả?",
+};
+const DECOYS = { de: 2, trungbinh: 3, kho: 4, sieukho: 4 }; // chữ cái gây nhiễu cho dạng Điền chữ cái
+const DECOY_LETTERS = Array.from("BCDĐGHKLMNPQRSTVXAIOU");
+let gameMode = store.get("vtv_mode", "mix");
+if (!MODES.some((m) => m.key === gameMode)) gameMode = "mix";
+
+const upper = (s) => s.normalize("NFC").toLocaleUpperCase("vi");
+const lines = (html) => html.split(" / ").join("<br/>");
+
+function questionPool(levelKey, kind) {
+  const list = kind === "scramble" ? LEVELS[levelKey].questions : MORE_QUESTIONS[levelKey][kind];
+  return list.map((q) => ({ ...q, kind }));
+}
+function pickQuestions(levelKey, mode) {
+  if (mode !== "mix") return shuffle(questionPool(levelKey, mode)).slice(0, QUESTIONS_PER_ROUND);
+  const kinds = MODES.slice(1).map((m) => m.key);
+  const per = Math.ceil(QUESTIONS_PER_ROUND / kinds.length);
+  return shuffle(kinds.flatMap((k) => shuffle(questionPool(levelKey, k)).slice(0, per))).slice(0, QUESTIONS_PER_ROUND);
+}
+
+// Chuẩn hóa mọi dạng câu hỏi về: target (các mảnh cần xếp đúng thứ tự), label (đáp án hiển thị)
+function parseQuestion(q, level) {
+  switch (q.kind) {
+    case "scramble": {
+      const a = upper(q.a);
+      return { target: Array.from(a.replace(/ /g, "")), words: a.split(" ").map((w) => Array.from(w).length), label: a, short: a, tag: q.type, clue: q.clue };
+    }
+    case "word": {
+      const a = upper(/\[([^\]]+)\]/.exec(q.t)[1]);
+      return { target: Array.from(a.replace(/ /g, "")), words: a.split(" ").map((w) => Array.from(w).length), label: a, short: a, tag: q.src };
+    }
+    case "letters": {
+      const blanks = [...q.t.normalize("NFC").matchAll(/\{(.)\}/gu)].map((x) => x[1]);
+      const target = blanks.map(upper);
+      const plain = q.t.replace(/[{}]/g, "").replace(/ \/ /g, " ");
+      return {
+        target, label: target.join(", "), tag: q.src,
+        decoys: shuffle(DECOY_LETTERS.filter((c) => !target.includes(c))).slice(0, DECOYS[level]),
+        lower: blanks.map((b) => b !== upper(b)),
+        short: plain.length > 46 ? plain.slice(0, 44) + "…" : plain,
+      };
+    }
+    case "order": {
+      return { target: q.t.normalize("NFC").replace(/[.,;:!?“”"]/g, "").split(/\s+/), label: q.t, short: q.t, tag: q.src };
+    }
+    case "spell":
+      return { target: [q.ok], options: shuffle([q.ok, q.bad]), label: q.ok, short: q.ok, tag: "Chính tả" };
+  }
+}
+
 async function startGame(levelKey) {
   if (!playerName) {
     const ok = await askName();
     if (!ok && !playerName) { playerName = "nguoichoi"; updateUserChip(); }
   }
-  const L = LEVELS[levelKey];
   game = {
-    level: levelKey,
-    qs: shuffle(L.questions).slice(0, QUESTIONS_PER_ROUND),
+    level: levelKey, mode: gameMode,
+    qs: pickQuestions(levelKey, gameMode),
     idx: 0, score: 0, correct: 0, hintsLeft: HINTS_PER_ROUND,
     phase: "play", history: [], saved: false,
   };
@@ -261,15 +336,16 @@ async function startGame(levelKey) {
 
 function setupQuestion() {
   const q = game.qs[game.idx];
-  const answer = q.a.normalize("NFC");
-  const letters = Array.from(answer.replace(/ /g, ""));
-  let order = shuffle(letters.map((_, i) => i));
-  for (let tries = 0; tries < 10 && letters.length > 1 && order.every((v, i) => letters[v] === letters[i]); tries++) order = shuffle(order);
+  const p = parseQuestion(q, game.level);
+  const pieces = [...p.target, ...(p.decoys || [])];
+  let order = shuffle(pieces.map((_, i) => i));
+  const n = p.target.length;
+  for (let tries = 0; tries < 10 && n > 1 && order.slice(0, n).every((v, i) => pieces[v] === p.target[i]); tries++) order = shuffle(order);
   Object.assign(game, {
-    q, answer, letters,
-    words: answer.split(" ").map((w) => Array.from(w).length),
-    tiles: order.map((i) => ({ ch: letters[i], used: false })),
-    slots: letters.map(() => ({ tile: null, locked: false })),
+    q, kind: q.kind, target: p.target, label: p.label, short: p.short, tag: p.tag, clue: p.clue || "",
+    words: p.words || null, lower: p.lower || [], options: p.options || null,
+    tiles: order.map((i) => ({ ch: pieces[i], used: false })),
+    slots: q.kind === "spell" ? [] : p.target.map(() => ({ tile: null, locked: false })),
     timeLeft: LEVELS[game.level].time, qHints: 0, phase: "play", animateIn: true,
   });
 }
@@ -297,6 +373,7 @@ function renderPlay() {
   if (game.phase === "result") return renderResult();
   if (game.phase === "done") return renderSummary();
   const L = LEVELS[game.level];
+  const isSpell = game.kind === "spell";
   const cheers = ["Bạn làm được mà! ✨", "Cố lên nào! 💪", "Bình tĩnh suy nghĩ nhé!", "Tiếng Việt hay lắm đó!"];
   const page = mount(`
     <section class="page play">
@@ -309,19 +386,21 @@ function renderPlay() {
       </div>
       <div class="progress"><i style="--p:${(game.idx / game.qs.length) * 100}%"></i></div>
       <div class="stage">
-        <div class="board">
+        <div class="board kind-${game.kind}">
           <img class="qblock" src="assets/question-block.png" alt="" />
           <div class="board-inner">
-            <p class="instr">Sắp xếp các chữ cái sau để tạo thành một từ/cụm từ có nghĩa:</p>
-            <div class="clue"><span class="tag">${esc(game.q.type)}</span><span>${esc(game.q.clue)}</span></div>
+            <p class="instr">${KIND_INSTR[game.kind]}</p>
+            <div class="clue"><span class="tag">${esc(game.tag)}</span>${game.clue ? `<span>${esc(game.clue)}</span>` : ""}</div>
+            <div class="passage"></div>
             <div class="tiles"></div>
             <div class="slots"></div>
+            ${isSpell ? "" : `
             <div class="actions">
               <button class="btn btn-blue" data-act="clear">${ICON.erase} Xóa</button>
               <button class="btn btn-blue" data-act="hint">${ICON.bulb} Gợi ý <span class="badge">${game.hintsLeft}</span></button>
               <button class="btn btn-green" data-act="check">${ICON.check} Xác nhận</button>
             </div>
-            <button class="skip" data-act="skip">Bỏ qua câu này</button>
+            <button class="skip" data-act="skip">Bỏ qua câu này</button>`}
           </div>
           <img class="books" src="assets/books.png" alt="" />
         </div>
@@ -331,36 +410,64 @@ function renderPlay() {
       </div>
     </section>`);
 
-  // ô chữ cái
-  const tilesEl = $(".tiles", page);
-  game.tileEls = game.tiles.map((t, i) => {
-    const b = document.createElement("button");
-    b.className = "tile" + (game.animateIn ? " pop" : "") + (t.used ? " used" : "");
-    b.style.setProperty("--i", i);
-    b.textContent = t.ch;
-    b.setAttribute("aria-label", `Chữ ${t.ch}`);
-    b.addEventListener("click", () => placeTile(i));
-    tilesEl.appendChild(b);
-    return b;
-  });
-  // ô đáp án, nhóm theo từng tiếng
-  const slotsEl = $(".slots", page);
+  const passage = $(".passage", page), tilesEl = $(".tiles", page), slotsEl = $(".slots", page);
   game.slotEls = [];
-  let k = 0;
-  game.words.forEach((len) => {
-    const w = document.createElement("div");
-    w.className = "word";
-    for (let j = 0; j < len; j++, k++) {
-      const s = document.createElement("div");
-      const idx = k;
-      s.className = "slot";
-      s.style.setProperty("--i", idx);
-      s.addEventListener("click", () => removeFromSlot(idx));
-      w.appendChild(s);
-      game.slotEls.push(s);
-    }
-    slotsEl.appendChild(w);
+  const makeSlot = (cls = "") => {
+    const s = document.createElement("span");
+    const idx = game.slotEls.length;
+    s.className = "slot " + cls;
+    s.style.setProperty("--i", idx);
+    s.addEventListener("click", () => removeFromSlot(idx));
+    game.slotEls.push(s);
+    return s;
+  };
+  const appendText = (el, text) => text.split(" / ").forEach((part, i) => {
+    if (i) el.appendChild(document.createElement("br"));
+    el.appendChild(document.createTextNode(part));
   });
+
+  if (isSpell) {
+    passage.innerHTML = `<div class="spell-q">“${esc(game.options[0])}” hay “${esc(game.options[1])}”?</div>
+      <div class="choices">${game.options.map((o, i) => `<button class="choice" data-v="${esc(o)}" style="--i:${i}"><span class="key">${i + 1}</span>${esc(o)}</button>`).join("")}</div>`;
+    $$(".choice", passage).forEach((b) => b.addEventListener("click", () => chooseSpelling(b)));
+  } else if (game.kind === "letters") {
+    // các ô trống nằm ngay trong đoạn văn
+    game.q.t.normalize("NFC").split(/\{(.)\}/u).forEach((part, i) => {
+      if (i % 2) passage.appendChild(makeSlot("inline")); else appendText(passage, part);
+    });
+  } else if (game.kind === "word") {
+    const [before, after] = game.q.t.split(/\[[^\]]+\]/);
+    appendText(passage, before);
+    passage.insertAdjacentHTML("beforeend", '<span class="blank">…</span>');
+    appendText(passage, after);
+  } else {
+    passage.remove();
+  }
+
+  if (!isSpell) {
+    game.tileEls = game.tiles.map((t, i) => {
+      const b = document.createElement("button");
+      b.className = "tile" + (game.kind === "order" ? " wtile" : "") + (game.animateIn ? " pop" : "") + (t.used ? " used" : "");
+      b.style.setProperty("--i", i);
+      b.textContent = t.ch;
+      b.setAttribute("aria-label", game.kind === "order" ? `Từ ${t.ch}` : `Chữ ${t.ch}`);
+      b.addEventListener("click", () => placeTile(i));
+      tilesEl.appendChild(b);
+      return b;
+    });
+  } else tilesEl.remove();
+
+  if (game.words) { // ô đáp án nhóm theo từng tiếng
+    game.words.forEach((len) => {
+      const w = document.createElement("div");
+      w.className = "word";
+      for (let j = 0; j < len; j++) w.appendChild(makeSlot());
+      slotsEl.appendChild(w);
+    });
+  } else if (game.kind === "order") {
+    game.target.forEach(() => slotsEl.appendChild(makeSlot("wslot")));
+  } else slotsEl.remove();
+
   game.animateIn = false;
   refreshSlots();
   fitBoard();
@@ -378,14 +485,19 @@ function renderPlay() {
 // Cỡ ô chữ theo chiều rộng bảng: cụm ngắn nằm trên 1 dòng, câu dài chia 2 dòng
 function fitBoard() {
   const board = $(".board"), inner = $(".board-inner");
-  if (!board || !game?.letters) return;
+  if (!board || !game?.target || game.kind === "spell") return;
   const cs = getComputedStyle(inner);
   const W = inner.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
-  const n = game.letters.length;
-  const lines = n > 16 ? 2 : 1;
-  const perLine = Math.ceil(n / lines) + (lines > 1 ? 2 : 0);
-  const wordGaps = Math.ceil((game.words.length - 1) / lines);
-  const t = Math.max(28, Math.min(64, Math.floor(W / (perLine * 1.17 + wordGaps * 0.55))));
+  let t;
+  if (game.kind === "order") t = W < 500 ? 40 : 50;
+  else if (game.kind === "letters") t = Math.max(36, Math.min(56, Math.floor(W / (game.tiles.length * 1.25))));
+  else {
+    const n = game.target.length;
+    const rows = n > 16 ? 2 : 1;
+    const perLine = Math.ceil(n / rows) + (rows > 1 ? 2 : 0);
+    const wordGaps = Math.ceil((game.words.length - 1) / rows);
+    t = Math.max(28, Math.min(64, Math.floor(W / (perLine * 1.17 + wordGaps * 0.55))));
+  }
   board.style.setProperty("--t", t + "px");
   board.style.setProperty("--gap", Math.round(t * 0.17) + "px");
 }
@@ -395,7 +507,8 @@ function refreshSlots() {
   const firstEmpty = game.slots.findIndex((s) => s.tile === null);
   game.slots.forEach((s, i) => {
     const el = game.slotEls[i];
-    el.textContent = s.tile === null ? "" : game.tiles[s.tile].ch;
+    const ch = s.tile === null ? "" : game.tiles[s.tile].ch;
+    el.textContent = game.lower[i] ? ch.toLocaleLowerCase("vi") : ch;
     el.classList.toggle("filled", s.tile !== null);
     el.classList.toggle("locked", s.locked);
     el.classList.toggle("next", i === firstEmpty);
@@ -451,7 +564,7 @@ function clearSlots() {
 function useHint() {
   if (game.phase !== "play") return;
   if (game.hintsLeft <= 0) { toast("Bạn đã dùng hết lượt gợi ý của lượt chơi này!"); Sound.play("wrong"); return; }
-  const target = game.letters;
+  const target = game.target;
   const si = game.slots.findIndex((s, i) => !s.locked && (s.tile === null || game.tiles[s.tile].ch !== target[i]));
   if (si < 0) { toast("Các ô đã đúng rồi, bấm Xác nhận nhé!"); return; }
   removeFromSlot(si, true);
@@ -471,9 +584,9 @@ function useHint() {
 function checkAnswer() {
   if (game.phase !== "play") return;
   if (game.slots.some((s) => s.tile === null)) { toast("Hãy điền đủ các ô trước nhé!"); Sound.play("wrong"); return; }
-  const guess = game.slots.map((s) => game.tiles[s.tile].ch).join("");
-  const slotsEl = $(".slots"), mascot = $(".play-mascot"), bubble = $(".play .bubble");
-  if (guess === game.letters.join("")) {
+  const guess = game.slots.map((s) => game.tiles[s.tile].ch).join("|");
+  const slotsEl = $(".slots") || $(".passage"), mascot = $(".play-mascot"), bubble = $(".play .bubble");
+  if (guess === game.target.join("|")) {
     stopTimer();
     game.phase = "checking";
     slotsEl.classList.add("win");
@@ -489,6 +602,18 @@ function checkAnswer() {
   }
 }
 
+function chooseSpelling(btn) {
+  if (game.phase !== "play") return;
+  stopTimer();
+  game.phase = "checking";
+  const ok = btn.dataset.v === game.q.ok;
+  btn.classList.add(ok ? "right" : "wrong");
+  if (!ok) $$(".choice").find((b) => b.dataset.v === game.q.ok)?.classList.add("right", "reveal");
+  $(".play-mascot").classList.add(ok ? "cheer" : "sad");
+  Sound.play(ok ? "correct" : "wrong");
+  setTimeout(() => finishQuestion(ok, ok ? "" : "wrong"), reduceMotion ? 300 : 1200);
+}
+
 function finishQuestion(ok, reason = "") {
   const L = LEVELS[game.level];
   let points = 0, bonus = 0;
@@ -499,7 +624,7 @@ function finishQuestion(ok, reason = "") {
     game.correct++;
   }
   game.last = { ok, reason, points, bonus };
-  game.history.push({ a: game.answer, ok });
+  game.history.push({ a: game.short, ok });
   game.phase = "result";
   router();
 }
@@ -512,7 +637,7 @@ function renderResult() {
     ? '<svg class="result-icon" viewBox="0 0 100 100"><circle class="ring" cx="50" cy="50" r="44" fill="none" stroke="#2fcf6a" stroke-width="4"/><circle cx="50" cy="50" r="42" fill="#2fcf6a" stroke="#fff" stroke-width="6"/><path d="M30 52l13 13 27-29" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/></svg>'
     : '<svg class="result-icon" viewBox="0 0 100 100"><circle cx="50" cy="50" r="42" fill="#ff6b6b" stroke="#fff" stroke-width="6"/><path d="M36 36l28 28M64 36L36 64" stroke="#fff" stroke-width="10" stroke-linecap="round"/></svg>';
   const mascot = ok
-    ? `<div class="result-mascot"><div class="bob"><img src="assets/mascot-cheer.png" alt="" /><div class="sign ${game.answer.length > 14 ? "long" : ""}">${esc(game.answer)}</div></div></div>`
+    ? `<div class="result-mascot"><div class="bob"><img src="assets/mascot-cheer.png" alt="" /><div class="sign ${game.label.length > 14 ? "long" : ""}">${esc(game.label.length > 24 ? "Tuyệt vời!" : game.label)}</div></div></div>`
     : `<div class="result-mascot"><div class="bob"><img src="assets/mascot-game.png" alt="" /></div></div>`;
   const page = mount(`
     <section class="page">
@@ -524,7 +649,8 @@ function renderResult() {
         <div class="result-center">
           ${icon}
           <h1 class="${ok ? "" : "bad"}">${title}</h1>
-          <div class="answer-line">Đáp án: <b>${esc(game.answer)}</b></div>
+          <div class="answer-line">Đáp án: <b>${esc(game.label)}</b></div>
+          ${fullTextHTML() ? `<blockquote class="full-text">${fullTextHTML()}</blockquote>` : ""}
           <div class="points-pill">${ICON.star} +<span class="count">0</span> điểm</div>
           <div class="bonus">${bonus ? `Thưởng tốc độ +${bonus}` : ""}${game.qHints && ok ? `${bonus ? " · " : ""}Dùng ${game.qHints} gợi ý` : ""}</div>
           <button class="btn btn-yellow btn-big btn-shine" data-next>${last ? "Xem kết quả" : "Câu tiếp theo"} ${ICON.arrow}</button>
@@ -532,7 +658,7 @@ function renderResult() {
         <div class="note explain-card">
           <h3>${ICON.book} Giải thích</h3>
           <p>${esc(game.q.explain)}</p>
-          <span class="src">${esc(game.q.type)}</span>
+          <span class="src">${esc(game.tag)}</span>
         </div>
       </div>
     </section>`);
@@ -548,11 +674,19 @@ function renderResult() {
   setTimeout(() => document.addEventListener("keydown", onKey), 400);
 }
 
+// Câu hoàn chỉnh, tô sáng phần người chơi cần điền
+function fullTextHTML() {
+  if (game.kind === "letters") return lines(esc(game.q.t).replace(/\{(.)\}/gu, "<mark>$1</mark>"));
+  if (game.kind === "word") return lines(esc(game.q.t).replace(/\[([^\]]+)\]/, "<mark>$1</mark>"));
+  if (game.kind === "spell") return `<s>${esc(game.q.bad)}</s> → <mark>${esc(game.q.ok)}</mark>`;
+  return "";
+}
+
 function renderSummary() {
   const L = LEVELS[game.level];
   if (!game.saved) {
     const scores = store.get("vtv_scores", []);
-    scores.push({ name: playerName || "nguoichoi", score: game.score, correct: game.correct, level: game.level, t: Date.now() });
+    scores.push({ name: playerName || "nguoichoi", score: game.score, correct: game.correct, level: game.level, mode: game.mode, t: Date.now() });
     store.set("vtv_scores", scores.slice(-500));
     game.saved = true;
   }
@@ -561,7 +695,7 @@ function renderSummary() {
     <section class="page summary">
       <img class="trophy" src="assets/trophy.png" alt="Cúp vàng" />
       <h1>${great ? "Xuất sắc!" : ok ? "Hoàn thành!" : "Cố gắng lên!"}</h1>
-      <div class="lvl">Cấp độ <span class="lv-badge ${game.level}">${L.name}</span> · Người chơi <b>${esc(playerName)}</b></div>
+      <div class="lvl">Cấp độ <span class="lv-badge ${game.level}">${L.name}</span> · ${MODES.find((m) => m.key === game.mode).name} · Người chơi <b>${esc(playerName)}</b></div>
       <div class="stats stagger">
         <div class="stat" style="--i:0"><b class="c1">0</b><span>Tổng điểm</span></div>
         <div class="stat" style="--i:1"><b>${game.correct}/${game.qs.length}</b><span>Câu đúng</span></div>
@@ -623,16 +757,21 @@ function confetti() {
   setTimeout(() => box.remove(), 2800);
 }
 
-// Bàn phím: gõ chữ để chọn, Backspace để xóa, Enter để xác nhận
+// Bàn phím: gõ chữ để chọn, Backspace để xóa, Enter để xác nhận; phím 1/2 cho câu chính tả
 document.addEventListener("keydown", (e) => {
   if (!game || game.phase !== "play" || currentRoute !== "choi" || !$("#modal").hidden) return;
+  if (game.kind === "spell") {
+    const b = $$(".choice")[+e.key - 1];
+    if (b) chooseSpelling(b);
+    return;
+  }
   if (e.key === "Enter") { e.preventDefault(); checkAnswer(); return; }
   if (e.key === "Backspace") {
     e.preventDefault();
     for (let i = game.slots.length - 1; i >= 0; i--) if (game.slots[i].tile !== null && !game.slots[i].locked) { removeFromSlot(i); break; }
     return;
   }
-  if (e.key.length === 1 && /\p{L}/u.test(e.key)) {
+  if (e.key.length === 1 && /\p{L}/u.test(e.key) && game.kind !== "order") {
     const key = e.key.normalize("NFC").toUpperCase();
     let ti = game.tiles.findIndex((t) => !t.used && t.ch === key);
     if (ti < 0) ti = game.tiles.findIndex((t) => !t.used && baseLetter(t.ch) === baseLetter(key));
@@ -733,8 +872,9 @@ function renderAbout() {
           <div class="howto" style="--i:3">
             <h2>Cách chơi</h2>
             <ol>
-              <li>Chọn cấp độ. Mỗi lượt có ${QUESTIONS_PER_ROUND} câu hỏi.</li>
-              <li>Bấm vào các chữ cái (hoặc gõ phím) để xếp vào ô theo đúng thứ tự. Bấm vào ô đã điền để trả chữ lại.</li>
+              <li>Chọn dạng câu hỏi (hoặc <b>Tổng hợp</b> để chơi cả 5 dạng) và cấp độ. Mỗi lượt có ${QUESTIONS_PER_ROUND} câu hỏi.</li>
+              <li><b>Sắp xếp chữ cái</b>, <b>Điền chữ cái</b>, <b>Điền từ</b>, <b>Sắp xếp từ</b>: bấm vào chữ/từ (hoặc gõ phím) để điền vào ô theo thứ tự; bấm vào ô đã điền để trả lại. Dạng Điền chữ cái có thêm chữ gây nhiễu.</li>
+              <li><b>Chính tả</b>: chọn cách viết đúng trong hai cách — chỉ được chọn một lần!</li>
               <li>Dùng <b>Gợi ý</b> để mở một chữ đúng (${HINTS_PER_ROUND} lượt mỗi ván, mỗi lần trừ 25% điểm câu đó).</li>
               <li>Trả lời nhanh trong ⅓ thời gian đầu để nhận <b>thưởng tốc độ</b>.</li>
             </ol>
