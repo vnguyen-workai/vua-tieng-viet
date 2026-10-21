@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Vua Tiếng Việt</title>
+  <meta name="description" content="Vua Tiếng Việt — trò chơi sắp xếp chữ cái, tôn vinh sự giàu đẹp của tiếng Việt." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect x='4' y='14' width='56' height='46' rx='12' fill='%23ff5fa2'/><text x='32' y='52' font-size='36' text-anchor='middle' font-family='Arial' font-weight='900' fill='white'>V</text><path d='M14 16 L20 2 L32 12 L44 2 L50 16 Z' fill='%23ffc93c'/></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Cảnh nền: bầu trời đêm, sao, đồi cây, chữ cái bay -->
+  <div class="scene" aria-hidden="true">
+    <div class="stars"></div>
+    <div class="moon"></div>
+    <div class="floaters"></div>
+    <svg class="hills" viewBox="0 0 1440 320" preserveAspectRatio="none">
+      <path class="h1" d="M0 190 C 180 120 340 150 520 175 S 860 120 1040 150 S 1320 110 1440 140 V320 H0Z" />
+      <path class="h2" d="M0 240 C 220 190 420 220 640 235 S 1020 190 1240 215 S 1400 220 1440 210 V320 H0Z" />
+      <path class="h3" d="M0 285 C 260 255 520 270 760 280 S 1200 255 1440 270 V320 H0Z" />
+    </svg>
+    <div class="tree t-left"></div>
+    <div class="tree t-left2"></div>
+    <div class="tree t-right"></div>
+    <div class="tree t-right2"></div>
+  </div>
+
+  <header class="nav">
+    <a href="#/" class="nav-logo" aria-label="Vua Tiếng Việt — Trang chủ"></a>
+    <nav class="nav-links">
+      <a href="#/" data-route="">Trang chủ</a>
+      <a href="#/cap-do" data-route="cap-do">Chơi ngay</a>
+      <a href="#/bang-xep-hang" data-route="bang-xep-hang">Bảng xếp hạng</a>
+      <a href="#/gioi-thieu" data-route="gioi-thieu">Giới thiệu</a>
+    </nav>
+    <div class="nav-right">
+      <button class="icon-btn" id="btn-music" aria-label="Bật/tắt nhạc nền" title="Nhạc nền"></button>
+      <button class="icon-btn" id="btn-sfx" aria-label="Bật/tắt hiệu ứng âm thanh" title="Hiệu ứng âm thanh"></button>
+      <button class="user-chip" id="btn-user" title="Đổi tên người chơi">
+        <span class="avatar"></span><span class="uname"></span>
+        <svg viewBox="0 0 24 24" width="14" height="14"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="view"></main>
+
+  <div class="modal" id="modal" hidden>
+    <form class="modal-card" id="name-form">
+      <img src="assets/mascot-home.png" alt="" class="modal-mascot" />
+      <h2>Bạn tên là gì?</h2>
+      <p>Tên của bạn sẽ hiện trên bảng xếp hạng.</p>
+      <input id="name-input" maxlength="16" autocomplete="off" placeholder="Nhập tên của bạn" required />
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" id="name-cancel">Để sau</button>
+        <button type="submit" class="btn btn-yellow">Lưu tên</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="questions.js"></script>
+  <script src="sound.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
