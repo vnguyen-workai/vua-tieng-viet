@@ -3,7 +3,7 @@
 Trò chơi sắp xếp chữ cái, tôn vinh sự giàu đẹp của tiếng Việt.
 
 - 5 dạng câu hỏi: **Sắp xếp chữ cái**, **Điền chữ cái còn thiếu**, **Điền từ còn thiếu**, **Sắp xếp từ**, **Chọn chính tả đúng** — hoặc chơi **Tổng hợp** cả 5 dạng
-- 4 cấp độ: **Dễ**, **Trung bình**, **Khó**, **Siêu khó** — hơn 250 câu hỏi, mỗi lượt 10 câu ngẫu nhiên
+- 4 cấp độ: **Dễ**, **Trung bình**, **Khó**, **Siêu khó** — hơn 450 câu hỏi, mỗi lượt 10 câu ngẫu nhiên, 1 phút mỗi câu
 - Gợi ý, đếm giờ, thưởng tốc độ, giải thích ý nghĩa sau mỗi câu
 - Bảng xếp hạng lưu trên trình duyệt (Tuần này / Tháng này / Tất cả)
 - Nhạc nền ngũ cung và hiệu ứng âm thanh tạo bằng Web Audio API

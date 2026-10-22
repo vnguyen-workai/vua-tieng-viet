@@ -170,7 +170,7 @@ function mount(html) {
 // ================= Trang chủ =================
 function renderHome() {
   const features = [
-    { t: "Kiến thức phong phú", d: "Hơn 250 câu hỏi với 5 dạng: xếp chữ, điền chữ, điền từ, xếp câu, chính tả", to: "cap-do",
+    { t: "Kiến thức phong phú", d: "Hơn 450 câu hỏi với 5 dạng: xếp chữ, điền chữ, điền từ, xếp câu, chính tả", to: "cap-do",
       ico: '<svg viewBox="0 0 48 48" class="ico"><path d="M4 10c6-3 13-3 20 1 7-4 14-4 20-1v28c-6-3-13-3-20 1-7-4-14-4-20-1z" fill="#2ec4b6" stroke="#0e7c74" stroke-width="2.5" stroke-linejoin="round"/><path d="M24 11v28" stroke="#0e7c74" stroke-width="2.5"/><path d="M9 17c3-1 7-1 10 1M9 23c3-1 7-1 10 1M29 18c3-2 7-2 10-1M29 24c3-2 7-2 10-1" stroke="#d6fff9" stroke-width="2" stroke-linecap="round"/></svg>' },
     { t: "Vừa học vừa chơi", d: "Giúp bạn mở rộng vốn từ và hiểu biết ngôn ngữ", to: "cap-do",
       ico: '<svg viewBox="0 0 48 48" class="ico"><path d="M24 8c-4-4-12-3-13 3-5 1-7 7-4 11-3 4-1 10 4 11 1 6 9 7 13 3z" fill="#5b9dff" stroke="#2a5fc4" stroke-width="2.5" stroke-linejoin="round"/><path d="M24 8c4-4 12-3 13 3 5 1 7 7 4 11 3 4 1 10-4 11-1 6-9 7-13 3z" fill="#7cb3ff" stroke="#2a5fc4" stroke-width="2.5" stroke-linejoin="round"/><path d="M24 8v28M15 17c3 0 5 2 5 5M33 17c-3 0-5 2-5 5M15 28c2-2 5-2 7 0M33 28c-2-2-5-2-7 0" stroke="#fff" stroke-width="2" stroke-linecap="round" fill="none"/></svg>' },
